@@ -61,8 +61,34 @@ class Unix:
         })
 
     def watch_video(self, lesson_id, duration) -> None:
+        csrf_url = f"{base_url}/api/validates/csrf"
+
+        browser_headers = {
+            'Authorization': f"Bearer {self.token}",
+            'Origin': 'https://uni-x.almv.kz',
+            'Referer': f'https://uni-x.almv.kz/platform/lessons/{lesson_id}',
+        }
+
+        # Get CSRF token
+        csrf_response = requests.post(csrf_url, headers=browser_headers, json={})
+
+        if csrf_response.status_code != 201:
+            print(f"Failed to get CSRF token. Status code: {csrf_response.status_code}")
+            print(f"Response: {csrf_response.text}")
+            return
+
+        csrf_token = None
+
+        for cookie in csrf_response.cookies:
+            if cookie.name == 'XSRF-Token':
+                csrf_token = cookie.value
+                break
+
+
         validation_endpoint = f"{base_url}/api/validates/watched/"
         now = datetime.now(timezone.utc)
+
+        cookies = {'XSRF-Token': csrf_token}
 
         start_data = {
             "event": "video-start",
@@ -72,8 +98,18 @@ class Unix:
             "lang": "EN"
         }
         start_res = requests.post(
-            url=validation_endpoint, headers=u.headers, json=start_data)
-        # get token
+            url=validation_endpoint,
+            headers=browser_headers,
+            cookies=cookies,
+            json=start_data
+        )
+
+        if start_res.status_code != 200 and start_res.status_code != 201:
+            print(f"Failed at video-start. Status code: {start_res.status_code}")
+            print(f"Response: {start_res.text}")
+            return
+
+        # Video reached event
         reach_data = {
             "event": "reached",
             "lessonId": lesson_id,
@@ -82,10 +118,19 @@ class Unix:
             "token": start_res.json().get("token"),
             "lang": "EN"
         }
-
         reach_res = requests.post(
-            url=validation_endpoint, headers=u.headers, json=reach_data)
+            url=validation_endpoint,
+            headers=browser_headers,
+            cookies=cookies,
+            json=reach_data
+        )
 
+        if reach_res.status_code != 200 and reach_res.status_code != 201:
+            print(f"Failed at reached event. Status code: {reach_res.status_code}")
+            print(f"Response: {reach_res.text}")
+            return
+
+        # Video end event
         end_data = {
             "event": "video-end",
             "lessonId": lesson_id,
@@ -94,20 +139,38 @@ class Unix:
             "lang": "EN",
             "token": reach_res.json().get("token")
         }
+        end_res = requests.post(
+            url=validation_endpoint,
+            headers=browser_headers,
+            cookies=cookies,
+            json=end_data
+        )
 
-        end_res = requests.post(url=validation_endpoint,
-                                headers=u.headers, json=end_data)
+        if end_res.status_code != 200 and end_res.status_code != 201:
+            print(f"Failed at video-end. Status code: {end_res.status_code}")
+            print(f"Response: {end_res.text}")
+            return
 
-        watched_res = {
+        watched_data = {
             "videoDuration": duration,
             "videoWatched": duration,
             "token": end_res.json().get("token"),
         }
 
-        requests.post(url=f"{base_url}/api/lessons/{lesson_id}/watched",
-                      headers=u.headers, json=watched_res)
+        watched_url = f"{base_url}/api/lessons/{lesson_id}/watched"
 
-        print(f"Lesson {lesson_id} is watched")
+        watched_response = requests.post(
+            url=watched_url,
+            headers=browser_headers,
+            cookies=cookies,
+            json=watched_data
+        )
+
+        if watched_response.status_code == 200 or watched_response.status_code == 201:
+            print(f"Lesson {lesson_id} is watched")
+        else:
+            print(f"Failed to mark lesson {lesson_id} as watched. Status code: {watched_response.status_code}")
+            print(f"Response: {watched_response.text}")
 
     def pass_quiz(self, lesson_id) -> None:
         # get quiz detail
@@ -161,5 +224,5 @@ if __name__ == "__main__":
     # pprint(u.get_modules())
     # pprint(u.get_module_topics(module_id=266))
 
-    u.watch_video(lesson_id=9717, duration=544)
+    u.watch_video(lesson_id=10360, duration=298)
     # u.pass_quiz(lesson_id=10263)
