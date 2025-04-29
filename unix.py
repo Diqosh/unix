@@ -220,7 +220,7 @@ class Unix:
 
 
 if __name__ == "__main__":
-    u = Unix("di_tleuzhanuly@kbtu.kz", "TZFN74")
+    u = Unix("di_tleuzhanuly@kbtu.kz", "")
     # pprint(u.get_modules())
     # pprint(u.get_module_topics(module_id=266))
 
